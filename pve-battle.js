@@ -185,8 +185,13 @@ async function startPVEBattle() {
 	let opponentActive = {
 		species: null,
 		condition: null,
-		status: null
+		status: null,
+		boosts: {} // 追踪对手的能力变化
 	};
+	
+	// 追踪玩家当前宝可梦的能力变化和状态
+	let playerBoosts = {};
+	let playerStatus = null;
 	
 	// 处理 p1 的消息
 	(async () => {
@@ -221,11 +226,27 @@ async function startPVEBattle() {
 							const pokemonCN = translate(pokemonName, 'pokemon');
 							console.log(`\n${player} 派出了 ${pokemonCN} ${hp ? '(HP: ' + hp + ')' : ''}`);
 							
-							// 更新对手宝可梦信息
-							if (!isPlayer) {
+							// 更新宝可梦信息
+							if (isPlayer) {
+								// 玩家切换宝可梦，重置能力变化和状态
+								playerBoosts = {};
+								// 从HP字符串中提取状态
+								if (hp && hp.includes(' ')) {
+									const hpParts = hp.split(' ');
+									if (hpParts.length > 1) {
+										playerStatus = hpParts[1];
+									} else {
+										playerStatus = null;
+									}
+								} else {
+									playerStatus = null;
+								}
+							} else {
+								// 更新对手宝可梦信息
 								opponentActive.species = pokemonName;
 								opponentActive.condition = hp;
 								opponentActive.status = null; // 重置状态
+								opponentActive.boosts = {}; // 重置能力变化
 							}
 						} else if (line.startsWith('|move|')) {
 							const parts = line.split('|');
@@ -285,8 +306,10 @@ async function startPVEBattle() {
 							const isPlayer = target.startsWith('p1');
 							const targetName = target.split(': ')[1];
 							
-							// 更新对手宝可梦状态
-							if (!isPlayer && opponentActive.species === targetName) {
+							// 更新宝可梦状态
+							if (isPlayer) {
+								playerStatus = status;
+							} else if (opponentActive.species === targetName) {
 								opponentActive.status = status;
 							}
 						} else if (line.startsWith('|-curestatus|')) {
@@ -295,8 +318,10 @@ async function startPVEBattle() {
 							const isPlayer = target.startsWith('p1');
 							const targetName = target.split(': ')[1];
 							
-							// 清除对手宝可梦状态
-							if (!isPlayer && opponentActive.species === targetName) {
+							// 清除宝可梦状态
+							if (isPlayer) {
+								playerStatus = null;
+							} else if (opponentActive.species === targetName) {
 								opponentActive.status = null;
 							}
 						} else if (line.startsWith('|faint|')) {
@@ -330,7 +355,7 @@ async function startPVEBattle() {
 							const parts = line.split('|');
 							const pokemon = parts[2];
 							const stat = parts[3];
-							const amount = parts[4];
+							const amount = parseInt(parts[4]);
 							const isPlayer = pokemon.startsWith('p1');
 							const player = isPlayer ? '【你】' : '【对手】';
 							const pokemonName = pokemon.split(': ')[1];
@@ -346,11 +371,20 @@ async function startPVEBattle() {
 							};
 							const statCN = statNames[stat] || stat;
 							console.log(`  → ${player} ${pokemonCN} 的${statCN}上升了 ${amount} 级!`);
+							
+							// 更新能力变化
+							if (isPlayer) {
+								// 更新玩家能力变化
+								playerBoosts[stat] = (playerBoosts[stat] || 0) + amount;
+							} else if (opponentActive.species === pokemonName) {
+								// 更新对手能力变化
+								opponentActive.boosts[stat] = (opponentActive.boosts[stat] || 0) + amount;
+							}
 						} else if (line.startsWith('|-unboost|')) {
 							const parts = line.split('|');
 							const pokemon = parts[2];
 							const stat = parts[3];
-							const amount = parts[4];
+							const amount = parseInt(parts[4]);
 							const isPlayer = pokemon.startsWith('p1');
 							const player = isPlayer ? '【你】' : '【对手】';
 							const pokemonName = pokemon.split(': ')[1];
@@ -366,6 +400,29 @@ async function startPVEBattle() {
 							};
 							const statCN = statNames[stat] || stat;
 							console.log(`  → ${player} ${pokemonCN} 的${statCN}下降了 ${amount} 级!`);
+							
+							// 更新能力变化
+							if (isPlayer) {
+								// 更新玩家能力变化
+								playerBoosts[stat] = (playerBoosts[stat] || 0) - amount;
+							} else if (opponentActive.species === pokemonName) {
+								// 更新对手能力变化
+								opponentActive.boosts[stat] = (opponentActive.boosts[stat] || 0) - amount;
+							}
+						} else if (line.startsWith('|-clearboost|') || line.startsWith('|-clearallboost|')) {
+							const parts = line.split('|');
+							const pokemon = parts[2];
+							const isPlayer = pokemon.startsWith('p1');
+							const pokemonName = pokemon.split(': ')[1];
+							
+							// 清除能力变化
+							if (isPlayer) {
+								// 清除玩家能力变化
+								playerBoosts = {};
+							} else if (opponentActive.species === pokemonName) {
+								// 清除对手能力变化
+								opponentActive.boosts = {};
+							}
 						} else if (line.startsWith('|-sidestart|')) {
 							const parts = line.split('|');
 							const side = parts[2];
@@ -466,7 +523,7 @@ async function startPVEBattle() {
 									displaySwitchChoices(currentRequest);
 								} else if (currentRequest.active) {
 									waitingForChoice = true;
-									displayChoices(currentRequest, battleField, opponentActive);
+									displayChoices(currentRequest, battleField, opponentActive, playerBoosts, playerStatus);
 								}
 							} catch (e) {
 								console.error('解析请求失败:', e.message);
@@ -477,7 +534,7 @@ async function startPVEBattle() {
 					// 处理错误
 					if (line.startsWith('|error|')) {
 						const errorMsg = line.replace('|error|', '');
-						console.log('\n⚠️ 错误:', errorMsg);
+						console.log('\n错误:', errorMsg);
 						// 如果有无效选择错误，只提示错误，不重新显示对战信息
 						if (errorMsg.includes('[Invalid choice]') && currentRequest) {
 							waitingForChoice = true;
@@ -504,11 +561,11 @@ async function startPVEBattle() {
 						if (line.startsWith('|win|')) {
 							battleEnded = true;
 							const winner = line.split('|win|')[1];
-							console.log('\n🏆 战斗结束！');
+							console.log('\n战斗结束！');
 							console.log(`胜者: ${winner}`);
 						} else if (line === '|tie') {
 							battleEnded = true;
-							console.log('\n⚖️ 战斗结束！平局！');
+							console.log('\n战斗结束！平局！');
 						}
 					}
 				}
@@ -534,7 +591,7 @@ async function startPVEBattle() {
 					// 检查是否是特殊命令
 					if (choice.toLowerCase() === 'team') {
 						// 显示当前队伍状态
-						displayBattleTeamStatus(currentRequest);
+						displayBattleTeamStatus(currentRequest, playerBoosts, playerStatus);
 						waitingForChoice = true; // 重新等待输入
 					} else {
 						// 直接写入选择，不需要 >p1 前缀
@@ -554,15 +611,15 @@ async function startPVEBattle() {
 }
 
 // 显示可用的选择
-function displayChoices(request, battleField, opponentActive) {	
+function displayChoices(request, battleField, opponentActive, playerBoosts, playerStatus) {	
 	if (request.active && request.active[0]) {
 		const active = request.active[0];
 		const pokemon = request.side.pokemon;
 		
 		// 显示场地信息
-		console.log('\n' + '='.repeat(50));
 		if (battleField.weather || battleField.terrain || battleField.p1Side.length > 0 || battleField.p2Side.length > 0) {
-			console.log('🌍 场地状态:');
+			console.log('\n' + '='.repeat(50));
+			console.log('场地状态:');
 			
 			if (battleField.weather) {
 				const weatherNames = {
@@ -576,7 +633,7 @@ function displayChoices(request, battleField, opponentActive) {
 					'Delta Stream': '乱流'
 				};
 				const weatherCN = weatherNames[battleField.weather] || battleField.weather;
-				console.log(`   ☀️ 天气: ${weatherCN}`);
+				console.log(`   天气: ${weatherCN}`);
 			}
 			
 			if (battleField.terrain) {
@@ -588,17 +645,17 @@ function displayChoices(request, battleField, opponentActive) {
 					'Trick Room': '戏法空间'
 				};
 				const terrainCN = terrainNames[battleField.terrain] || battleField.terrain;
-				console.log(`   🗺️  场地: ${terrainCN}`);
+				console.log(`   场地: ${terrainCN}`);
 			}
 			
 			if (battleField.p1Side.length > 0) {
 				const effects = battleField.p1Side.map(e => translate(e, 'moves')).join(', ');
-				console.log(`   🛡️  我方场地: ${effects}`);
+				console.log(`   我方场地: ${effects}`);
 			}
 			
 			if (battleField.p2Side.length > 0) {
 				const effects = battleField.p2Side.map(e => translate(e, 'moves')).join(', ');
-				console.log(`   ⚔️  对手场地: ${effects}`);
+				console.log(`   对手场地: ${effects}`);
 			}
 			console.log('='.repeat(50));
 		}
@@ -607,24 +664,50 @@ function displayChoices(request, battleField, opponentActive) {
 		if (opponentActive.species) {
 			const oppSpeciesData = Sim.Dex.species.get(opponentActive.species);
 			const oppSpeciesCN = translate(opponentActive.species, 'pokemon');
-			console.log(`\n⚔️  对手出战: ${oppSpeciesCN}`);
+			console.log(`\n对手出战: ${oppSpeciesCN}`);
 			console.log(`   HP: ${opponentActive.condition || '未知'}`);
 			
 			if (oppSpeciesData.types) {
 				const types = oppSpeciesData.types.join(' / ');
-				console.log(`   🏷️  属性: ${types}`);
+				console.log(`   属性: ${types}`);
 			}
 			
 			if (opponentActive.status) {
 				const statusNames = {
-					'slp': '💤 睡眠',
-					'par': '⚡ 麻痹',
-					'frz': '❄️ 冰冻',
-					'brn': '🔥 灼伤',
-					'psn': '☠️ 中毒',
-					'tox': '☠️ 剧毒'
+					'slp': '睡眠',
+					'par': '麻痹',
+					'frz': '冰冻',
+					'brn': '灼伤',
+					'psn': '中毒',
+					'tox': '剧毒'
 				};
 				console.log(`   状态: ${statusNames[opponentActive.status] || opponentActive.status}`);
+			}
+			
+			// 显示对手能力等级变化
+			if (opponentActive.boosts) {
+				const boosts = [];
+				const boostNames = {
+					'atk': '攻击',
+					'def': '防御',
+					'spa': '特攻',
+					'spd': '特防',
+					'spe': '速度',
+					'accuracy': '命中',
+					'evasion': '闪避'
+				};
+				for (const stat in opponentActive.boosts) {
+					const boost = opponentActive.boosts[stat];
+					// 只有非零的能力变化才显示
+					if (typeof boost === 'number' && boost !== 0) {
+						const statCN = boostNames[stat] || stat;
+						const sign = boost > 0 ? '+' : '';
+						boosts.push(`${statCN}${sign}${boost}`);
+					}
+				}
+				if (boosts.length > 0) {
+					console.log(`   能力变化: ${boosts.join(' ')}`);
+				}
 			}
 		}
 		
@@ -633,13 +716,13 @@ function displayChoices(request, battleField, opponentActive) {
 		const speciesName = currentPokemon.ident.split(': ')[1];
 		const speciesData = Sim.Dex.species.get(speciesName);
 		const speciesCN = translate(speciesName, 'pokemon');
-		console.log(`\n🎯 当前出战: ${speciesCN}`);
+		console.log(`\n当前出战: ${speciesCN}`);
 		console.log(`   HP: ${currentPokemon.condition}`);
 		
 		// 显示属性
 		if (speciesData.types) {
 			const types = speciesData.types.join(' / ');
-			console.log(`   🏷️  属性: ${types}`);
+			console.log(`   属性: ${types}`);
 		}
 		
 		// 显示携带物品（如果已知）
@@ -648,7 +731,7 @@ function displayChoices(request, battleField, opponentActive) {
 			const itemData = Sim.Dex.items.get(currentPokemon.item);
 			const itemName = itemData.name || currentPokemon.item;
 			const itemCN = translate(itemName, 'items');
-			console.log(`   💎 携带物品: ${itemCN}`);
+			console.log(`   携带物品: ${itemCN}`);
 		}
 		
 		// 显示特性（如果已知）
@@ -658,27 +741,27 @@ function displayChoices(request, battleField, opponentActive) {
 			const abilityData = Sim.Dex.abilities.get(ability);
 			const abilityName = abilityData.name || ability;
 			const abilityCN = translate(abilityName, 'abilities');
-			console.log(`   ✨ 特性: ${abilityCN}`);
+			console.log(`   特性: ${abilityCN}`);
 			if (abilityData.shortDesc || abilityData.desc) {
 				console.log(`      ${abilityData.shortDesc || abilityData.desc}`);
 			}
 		}
 		
 		// 显示状态异常
-		if (currentPokemon.status) {
+		if (playerStatus) {
 			const statusNames = {
-				'slp': '💤 睡眠',
-				'par': '⚡ 麻痹',
-				'frz': '❄️ 冰冻',
-				'brn': '🔥 灼伤',
-				'psn': '☠️ 中毒',
-				'tox': '☠️ 剧毒'
+				'slp': '睡眠',
+				'par': '麻痹',
+				'frz': '冰冻',
+				'brn': '灼伤',
+				'psn': '中毒',
+				'tox': '剧毒'
 			};
-			console.log(`   状态: ${statusNames[currentPokemon.status] || currentPokemon.status}`);
+			console.log(`   状态: ${statusNames[playerStatus] || playerStatus}`);
 		}
 		
 		// 显示能力等级变化
-		if (active.boosts) {
+		if (playerBoosts && Object.keys(playerBoosts).length > 0) {
 			const boosts = [];
 			const boostNames = {
 				'atk': '攻击',
@@ -689,21 +772,22 @@ function displayChoices(request, battleField, opponentActive) {
 				'accuracy': '命中',
 				'evasion': '闪避'
 			};
-			for (const stat in active.boosts) {
-				const boost = active.boosts[stat];
-				if (boost !== 0) {
+			for (const stat in playerBoosts) {
+				const boost = playerBoosts[stat];
+				// 只有非零的能力变化才显示
+				if (typeof boost === 'number' && boost !== 0) {
 					const statCN = boostNames[stat] || stat;
 					const sign = boost > 0 ? '+' : '';
 					boosts.push(`${statCN}${sign}${boost}`);
 				}
 			}
 			if (boosts.length > 0) {
-				console.log(`   📈 能力变化: ${boosts.join(' ')}`);
+				console.log(`   能力变化: ${boosts.join(' ')}`);
 			}
 		}
 		
 		// 显示可用招式
-		console.log('\n📋 可用招式:');
+		console.log('\n可用招式:');
 		active.moves.forEach((move, index) => {
 			const moveData = Sim.Dex.moves.get(move.move);
 			const moveName = moveData.name || move.move;
@@ -738,16 +822,16 @@ function displayChoices(request, battleField, opponentActive) {
 					console.log(`      ${moveData.shortDesc || moveData.desc}`);
 				}
 			} else {
-				console.log(`   ${index + 1}. ${moveCN} ❌ [已禁用]`);
+				console.log(`   ${index + 1}. ${moveCN} [已禁用]`);
 			}
 		});
 		
 		// 显示太晶化信息
 		if (active.canTerastallize) {
-			console.log(`\n💠 可以太晶化！太晶属性: ${currentPokemon.teraType || '未知'}`);
+			console.log(`\n可以太晶化！太晶属性: ${currentPokemon.teraType || '未知'}`);
 		}
 		
-		console.log('\n💡 输入格式:');
+		console.log('\n输入格式:');
 		console.log('   使用招式: move 1');
 		console.log('   切换宝可梦: switch 2');
 		if (active.canTerastallize) {
@@ -760,12 +844,12 @@ function displayChoices(request, battleField, opponentActive) {
 // 显示换人选择
 function displaySwitchChoices(request) {
 	console.log('\n' + '='.repeat(50));
-	console.log('💀 你的宝可梦倒下了！请选择下一个出战的宝可梦：');
+	console.log('请选择下一个出战的宝可梦：');
 	console.log('='.repeat(50));
 	
 	const pokemon = request.side.pokemon;
 	
-	console.log('\n🔄 可用的宝可梦:');
+	console.log('\n可用的宝可梦:');
 	pokemon.forEach((poke, index) => {
 		if (!poke.condition.endsWith(' fnt') && !poke.active) {
 			const speciesName = poke.ident.split(': ')[1];
@@ -773,7 +857,7 @@ function displaySwitchChoices(request) {
 		}
 	});
 	
-	console.log('\n💡 输入格式: switch 2');
+	console.log('\n输入格式: switch 2');
 }
 
 // 获取玩家选择
@@ -785,7 +869,7 @@ async function getPlayerChoice() {
 // 显示队伍信息
 function displayTeamInfo(team, trainerName) {
 	console.log('='.repeat(60));
-	console.log(`🎒 ${trainerName} 的队伍`);
+	console.log(`${trainerName} 的队伍`);
 	console.log('='.repeat(60));
 	
 	team.forEach((pokemon, index) => {
@@ -803,7 +887,7 @@ function displayTeamInfo(team, trainerName) {
 		// 显示属性
 		if (speciesData.types) {
 			const types = speciesData.types.join(' / ');
-			console.log(`    🏷️  属性: ${types}`);
+			console.log(`    属性: ${types}`);
 		}
 		
 		// 性格（优先显示）
@@ -823,7 +907,7 @@ function displayTeamInfo(team, trainerName) {
 		if (pokemon.ability) {
 			const abilityCN = translate(pokemon.ability, 'abilities');
 			const abilityData = Sim.Dex.abilities.get(pokemon.ability);
-			console.log(`    ✨ 特性: ${abilityCN}`);
+			console.log(`    特性: ${abilityCN}`);
 			if (abilityData.desc || abilityData.shortDesc) {
 				console.log(`       ${abilityData.shortDesc || abilityData.desc}`);
 			}
@@ -832,12 +916,12 @@ function displayTeamInfo(team, trainerName) {
 		// 携带物品
 		if (pokemon.item) {
 			const itemCN = translate(pokemon.item, 'items');
-			console.log(`    💎 携带物品: ${itemCN}`);
+			console.log(`    携带物品: ${itemCN}`);
 		}
 		
 		// 招式
 		if (pokemon.moves && pokemon.moves.length > 0) {
-			console.log(`    📋 招式:`);
+			console.log(`    招式:`);
 			pokemon.moves.forEach((move, i) => {
 				const moveData = Sim.Dex.moves.get(move);
 				const moveName = moveData.name || move;
@@ -889,7 +973,7 @@ function displayTeamInfo(team, trainerName) {
 				if (pokemon.evs.spa) evs.push(`SpA:${pokemon.evs.spa}`);
 				if (pokemon.evs.spd) evs.push(`SpD:${pokemon.evs.spd}`);
 				if (pokemon.evs.spe) evs.push(`Spe:${pokemon.evs.spe}`);
-				console.log(`    💪 努力值: ${evs.join(' ')}`);
+				console.log(`    努力值: ${evs.join(' ')}`);
 			}
 		}
 		
@@ -902,12 +986,12 @@ function displayTeamInfo(team, trainerName) {
 			baseStats.push(`特攻:${speciesData.baseStats.spa}`);
 			baseStats.push(`特防:${speciesData.baseStats.spd}`);
 			baseStats.push(`速度:${speciesData.baseStats.spe}`);
-			console.log(`    📊 种族值: ${baseStats.join(' ')}`);
+			console.log(`    种族值: ${baseStats.join(' ')}`);
 		}
 		
 		// 太晶属性（如果是第9代）
 		if (pokemon.teraType) {
-			console.log(`    💠 太晶属性: ${pokemon.teraType}`);
+			console.log(`    太晶属性: ${pokemon.teraType}`);
 		}
 	});
 	
@@ -915,23 +999,24 @@ function displayTeamInfo(team, trainerName) {
 }
 
 // 显示战斗中的队伍状态
-function displayBattleTeamStatus(request) {
+function displayBattleTeamStatus(request, playerBoosts, playerStatus) {
 	if (!request || !request.side || !request.side.pokemon) {
 		console.log('无法获取队伍信息');
 		return;
 	}
 	
 	console.log('\n' + '='.repeat(60));
-	console.log('📋 你的队伍状态');
+	console.log('你的队伍状态');
 	console.log('='.repeat(60));
 	
 	const pokemon = request.side.pokemon;
+	
 	pokemon.forEach((poke, index) => {
 		const speciesName = poke.ident.split(': ')[1];
 		const speciesData = Sim.Dex.species.get(speciesName);
 		const speciesCN = translate(speciesName, 'pokemon');
-		const isActive = poke.active ? ' ⚔️ [出战中]' : '';
-		const isFainted = poke.condition.endsWith(' fnt') ? ' 💀 [已昏厥]' : '';
+		const isActive = poke.active ? ' [出战中]' : '';
+		const isFainted = poke.condition.endsWith(' fnt') ? ' [已昏厥]' : '';
 		
 		console.log(`\n【${index + 1}】 ${speciesCN}${isActive}${isFainted}`);
 		console.log(`    HP: ${poke.condition}`);
@@ -939,7 +1024,7 @@ function displayBattleTeamStatus(request) {
 		// 显示属性
 		if (speciesData.types) {
 			const types = speciesData.types.join(' / ');
-			console.log(`    🏷️  属性: ${types}`);
+			console.log(`    属性: ${types}`);
 		}
 		
 		// 显示携带物品
@@ -948,7 +1033,7 @@ function displayBattleTeamStatus(request) {
 			const itemData = Sim.Dex.items.get(poke.item);
 			const itemName = itemData.name || poke.item;
 			const itemCN = translate(itemName, 'items');
-			console.log(`    💎 携带物品: ${itemCN}`);
+			console.log(`    携带物品: ${itemCN}`);
 		}
 		
 		// 显示特性
@@ -958,28 +1043,55 @@ function displayBattleTeamStatus(request) {
 			const abilityData = Sim.Dex.abilities.get(ability);
 			const abilityName = abilityData.name || ability;
 			const abilityCN = translate(abilityName, 'abilities');
-			console.log(`    ✨ 特性: ${abilityCN}`);
+			console.log(`    特性: ${abilityCN}`);
 			if (abilityData.shortDesc || abilityData.desc) {
 				console.log(`       ${abilityData.shortDesc || abilityData.desc}`);
 			}
 		}
 		
 		// 显示状态异常
-		if (poke.status) {
+		const displayStatus = poke.active ? playerStatus : poke.status;
+		if (displayStatus) {
 			const statusNames = {
-				'slp': '💤 睡眠',
-				'par': '⚡ 麻痹',
-				'frz': '❄️ 冰冻',
-				'brn': '🔥 灼伤',
-				'psn': '☠️ 中毒',
-				'tox': '☠️ 剧毒'
+				'slp': '睡眠',
+				'par': '麻痹',
+				'frz': '冰冻',
+				'brn': '灼伤',
+				'psn': '中毒',
+				'tox': '剧毒'
 			};
-			console.log(`    状态: ${statusNames[poke.status] || poke.status}`);
+			console.log(`    状态: ${statusNames[displayStatus] || displayStatus}`);
+		}
+		
+		// 显示能力等级变化（仅当前出战的宝可梦）
+		if (poke.active && playerBoosts && Object.keys(playerBoosts).length > 0) {
+			const boosts = [];
+			const boostNames = {
+				'atk': '攻击',
+				'def': '防御',
+				'spa': '特攻',
+				'spd': '特防',
+				'spe': '速度',
+				'accuracy': '命中',
+				'evasion': '闪避'
+			};
+			for (const stat in playerBoosts) {
+				const boost = playerBoosts[stat];
+				// 只有非零的能力变化才显示
+				if (typeof boost === 'number' && boost !== 0) {
+					const statCN = boostNames[stat] || stat;
+					const sign = boost > 0 ? '+' : '';
+					boosts.push(`${statCN}${sign}${boost}`);
+				}
+			}
+			if (boosts.length > 0) {
+				console.log(`    能力变化: ${boosts.join(' ')}`);
+			}
 		}
 		
 		// 显示已知的招式
 		if (poke.moves && poke.moves.length > 0) {
-			console.log(`    📋 招式:`);
+			console.log(`    招式:`);
 			poke.moves.forEach((move, i) => {
 				const moveData = Sim.Dex.moves.get(move);
 				const moveName = moveData.name || move;
