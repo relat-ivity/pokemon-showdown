@@ -677,7 +677,7 @@ function displayChoices(request, battleField, opponentActive, playerBoosts, play
 			speciesLog += ` 属性:${types}`;
 		}
 
-		speciesLog += ` HP比例:${opponentActive.condition || '未知'}`;
+		speciesLog += ` HP(%):${opponentActive.condition || '未知'}`;
 		
 		console.log(speciesLog);
 			
@@ -810,7 +810,7 @@ function displayChoices(request, battleField, opponentActive, playerBoosts, play
 			
 			if (!move.disabled) {
 				const ppInfo = move.pp !== undefined ? ` (PP: ${move.pp}/${move.maxpp})` : '';
-				let moveInfo = `   ${index + 1}. ${moveCN}`;
+				let moveInfo = `   ${index + 1}.${moveCN}`;
 				
 				// 添加属性
 				if (moveData.type) {
@@ -856,7 +856,7 @@ function displaySwitchChoices(request) {
 	pokemon.forEach((poke, index) => {
 		if (!poke.condition.endsWith(' fnt') && !poke.active) {
 			const speciesName = poke.ident.split(': ')[1];
-			console.log(`   ${index + 1}. ${speciesName} (HP: ${poke.condition})`);
+			console.log(`   ${index + 1}. ${translate(speciesName, 'pokemon')} (HP: ${poke.condition})`);
 		}
 	});
 	
@@ -877,21 +877,23 @@ function displayTeamInfo(team, trainerName) {
 	
 	team.forEach((pokemon, index) => {
 		const speciesCN = translate(pokemon.species, 'pokemon');
-		console.log(`\n【${index + 1}】 ${speciesCN}${pokemon.name && pokemon.name !== pokemon.species ? ` (${pokemon.name})` : ''}`);
-		
-		// 等级和性别
-		const level = pokemon.level || 100;
 		const gender = pokemon.gender ? ` (${pokemon.gender})` : '';
-		console.log(`    等级: ${level}${gender}`);
+		logInfo = `\n[${index + 1}] ${speciesCN}${pokemon.name && pokemon.name !== pokemon.species ? ` (${pokemon.name})` : ''}${gender}`;
 		
 		// 获取宝可梦数据
 		const speciesData = Sim.Dex.species.get(pokemon.species);
 		
 		// 显示属性
 		if (speciesData.types) {
-			const types = speciesData.types.join(' / ');
-			console.log(`    属性: ${types}`);
+			const types = speciesData.types.join('/');
+			logInfo += ` 属性:${types}`;
 		}
+
+		// 太晶属性（如果是第9代）
+		if (pokemon.teraType) {
+			logInfo += ` 太晶属性: ${pokemon.teraType}`;
+		}
+		console.log(logInfo)
 		
 		// 性格（优先显示）
 		if (pokemon.nature) {
@@ -910,16 +912,29 @@ function displayTeamInfo(team, trainerName) {
 		if (pokemon.ability) {
 			const abilityCN = translate(pokemon.ability, 'abilities');
 			const abilityData = Sim.Dex.abilities.get(pokemon.ability);
-			console.log(`    特性: ${abilityCN}`);
+			logInfo = `    特性: ${abilityCN}`;
 			if (abilityData.desc || abilityData.shortDesc) {
-				console.log(`       ${abilityData.shortDesc || abilityData.desc}`);
+				logInfo += ` 描述: ${abilityData.shortDesc || abilityData.desc}`;
 			}
+			console.log(logInfo);
 		}
 		
 		// 携带物品
 		if (pokemon.item) {
 			const itemCN = translate(pokemon.item, 'items');
 			console.log(`    携带物品: ${itemCN}`);
+		}
+
+		// 种族值
+		if (speciesData.baseStats) {
+			const baseStats = [];
+			baseStats.push(`HP:${speciesData.baseStats.hp}`);
+			baseStats.push(`攻击:${speciesData.baseStats.atk}`);
+			baseStats.push(`防御:${speciesData.baseStats.def}`);
+			baseStats.push(`特攻:${speciesData.baseStats.spa}`);
+			baseStats.push(`特防:${speciesData.baseStats.spd}`);
+			baseStats.push(`速度:${speciesData.baseStats.spe}`);
+			console.log(`    种族值: ${baseStats.join(' ')}`);
 		}
 		
 		// 招式
@@ -929,7 +944,7 @@ function displayTeamInfo(team, trainerName) {
 				const moveData = Sim.Dex.moves.get(move);
 				const moveName = moveData.name || move;
 				const moveCN = translate(moveName, 'moves');
-				let moveInfo = `       ${i + 1}. ${moveCN}`;
+				let moveInfo = `       ${i + 1}.${moveCN}`;
 				
 				// 添加属性
 				if (moveData.type) {
@@ -948,12 +963,11 @@ function displayTeamInfo(team, trainerName) {
 					moveInfo += ` 命中:${moveData.accuracy}%`;
 				}
 				
-				console.log(moveInfo);
-				
 				// 添加技能描述
 				if (moveData.shortDesc || moveData.desc) {
-					console.log(`          ${moveData.shortDesc || moveData.desc}`);
+					moveInfo += ` 描述:${moveData.shortDesc || moveData.desc}`;
 				}
+				console.log(moveInfo);
 			});
 		}
 		
@@ -963,38 +977,6 @@ function displayTeamInfo(team, trainerName) {
 			if (hasNonMaxIV) {
 				const ivStr = `HP:${pokemon.ivs.hp || 31} Atk:${pokemon.ivs.atk || 31} Def:${pokemon.ivs.def || 31} SpA:${pokemon.ivs.spa || 31} SpD:${pokemon.ivs.spd || 31} Spe:${pokemon.ivs.spe || 31}`;
 			}
-		}
-		
-		// 努力值（如果有）
-		if (pokemon.evs) {
-			const hasEVs = Object.values(pokemon.evs).some(ev => ev > 0);
-			if (hasEVs) {
-				const evs = [];
-				if (pokemon.evs.hp) evs.push(`HP:${pokemon.evs.hp}`);
-				if (pokemon.evs.atk) evs.push(`Atk:${pokemon.evs.atk}`);
-				if (pokemon.evs.def) evs.push(`Def:${pokemon.evs.def}`);
-				if (pokemon.evs.spa) evs.push(`SpA:${pokemon.evs.spa}`);
-				if (pokemon.evs.spd) evs.push(`SpD:${pokemon.evs.spd}`);
-				if (pokemon.evs.spe) evs.push(`Spe:${pokemon.evs.spe}`);
-				console.log(`    努力值: ${evs.join(' ')}`);
-			}
-		}
-		
-		// 种族值
-		if (speciesData.baseStats) {
-			const baseStats = [];
-			baseStats.push(`HP:${speciesData.baseStats.hp}`);
-			baseStats.push(`攻击:${speciesData.baseStats.atk}`);
-			baseStats.push(`防御:${speciesData.baseStats.def}`);
-			baseStats.push(`特攻:${speciesData.baseStats.spa}`);
-			baseStats.push(`特防:${speciesData.baseStats.spd}`);
-			baseStats.push(`速度:${speciesData.baseStats.spe}`);
-			console.log(`    种族值: ${baseStats.join(' ')}`);
-		}
-		
-		// 太晶属性（如果是第9代）
-		if (pokemon.teraType) {
-			console.log(`    太晶属性: ${pokemon.teraType}`);
 		}
 	});
 	
@@ -1099,7 +1081,7 @@ function displayBattleTeamStatus(request, playerBoosts, playerStatus) {
 				const moveData = Sim.Dex.moves.get(move);
 				const moveName = moveData.name || move;
 				const moveCN = translate(moveName, 'moves');
-				let moveInfo = `       ${i + 1}. ${moveCN}`;
+				let moveInfo = `       ${i + 1}.${moveCN}`;
 				
 				// 添加属性
 				if (moveData.type) {
