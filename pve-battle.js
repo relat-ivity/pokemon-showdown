@@ -6,7 +6,7 @@
  */
 
 const Sim = require('./dist/sim');
-const { RandomPlayerAI } = require('./dist/sim/tools/random-player-ai');
+const { SmartPlayerAI } = require('./smart-ai');
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
@@ -94,6 +94,12 @@ async function startPVEBattle() {
 	// 选择世代和格式 - 50级单打对战
 	const format = 'gen9battlestadiumsingles';
 	const playerName = 'Player';
+			
+	console.log('输入格式:');
+	console.log('   使用招式: move 1');
+	console.log('   切换宝可梦: switch 2');
+	console.log('   太晶化攻击: move 1 terastallize  (使用第1个招式并太晶化)');
+	console.log('   查看队伍: team  (查看所有宝可梦状态)');
 	
 	console.log('\n正在生成随机队伍...\n');
 	
@@ -163,8 +169,8 @@ async function startPVEBattle() {
 	const continueGame = await prompt('\n按回车开始对战...');
 	console.log('\n战斗开始！\n');
 	
-	// AI 对手
-	const ai = new RandomPlayerAI(streams.p2);
+	// AI 对手 - 使用智能AI
+	const ai = new SmartPlayerAI(streams.p2);
 	ai.start();
 	
 	let waitingForChoice = false;
@@ -741,9 +747,9 @@ function displayChoices(request, battleField, opponentActive, playerBoosts, play
 			const abilityData = Sim.Dex.abilities.get(ability);
 			const abilityName = abilityData.name || ability;
 			const abilityCN = translate(abilityName, 'abilities');
-			console.log(`   特性: ${abilityCN}`);
+			abilityInfo =`   特性: ${abilityCN}`;
 			if (abilityData.shortDesc || abilityData.desc) {
-				console.log(`      ${abilityData.shortDesc || abilityData.desc}`);
+				console.log(abilityInfo + ` 描述：${abilityData.shortDesc || abilityData.desc}`);
 			}
 		}
 		
@@ -786,6 +792,11 @@ function displayChoices(request, battleField, opponentActive, playerBoosts, play
 			}
 		}
 		
+		// 显示太晶化信息
+		if (active.canTerastallize) {
+			console.log(`   太晶属性: ${currentPokemon.teraType || '未知'}（可以太晶化！）`);
+		}
+
 		// 显示可用招式
 		console.log('\n可用招式:');
 		active.moves.forEach((move, index) => {
@@ -804,40 +815,28 @@ function displayChoices(request, battleField, opponentActive, playerBoosts, play
 				
 				// 添加威力
 				if (moveData.basePower) {
-					moveInfo += ` 威力:${moveData.basePower}`;
+					moveInfo += ` 威力：${moveData.basePower}`;
 				}
 				
 				// 添加命中率
 				if (moveData.accuracy === true) {
-					moveInfo += ` 命中:--`;
+					moveInfo += ` 命中：--`;
 				} else if (moveData.accuracy) {
-					moveInfo += ` 命中:${moveData.accuracy}%`;
+					moveInfo += ` 命中：${moveData.accuracy}%`;
 				}
 				
 				moveInfo += ppInfo;
-				console.log(moveInfo);
-				
 				// 添加技能描述
 				if (moveData.shortDesc || moveData.desc) {
-					console.log(`      ${moveData.shortDesc || moveData.desc}`);
+					moveInfo += ` 描述：${moveData.shortDesc || moveData.desc}`;
 				}
+				console.log(moveInfo);
 			} else {
 				console.log(`   ${index + 1}. ${moveCN} [已禁用]`);
 			}
 		});
 		
-		// 显示太晶化信息
-		if (active.canTerastallize) {
-			console.log(`\n可以太晶化！太晶属性: ${currentPokemon.teraType || '未知'}`);
-		}
-		
-		console.log('\n输入格式:');
-		console.log('   使用招式: move 1');
-		console.log('   切换宝可梦: switch 2');
-		if (active.canTerastallize) {
-			console.log('   太晶化攻击: move 1 terastallize  (使用第1个招式并太晶化)');
-		}
-		console.log('   查看队伍: team  (查看所有宝可梦状态)');
+
 	}
 }
 
@@ -900,7 +899,7 @@ function displayTeamInfo(team, trainerName) {
 				const minusCN = translate(effect.minus, 'stats');
 				effectText = ` (+${plusCN} -${minusCN})`;
 			}
-			console.log(`    🎭 性格: ${natureCN}${effectText}`);
+			console.log(`    性格: ${natureCN}${effectText}`);
 		}
 		
 		// 特性
