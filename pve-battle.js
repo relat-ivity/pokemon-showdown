@@ -670,13 +670,16 @@ function displayChoices(request, battleField, opponentActive, playerBoosts, play
 		if (opponentActive.species) {
 			const oppSpeciesData = Sim.Dex.species.get(opponentActive.species);
 			const oppSpeciesCN = translate(opponentActive.species, 'pokemon');
-			console.log(`\n对手出战: ${oppSpeciesCN}`);
-			console.log(`   HP: ${opponentActive.condition || '未知'}`);
-			
-			if (oppSpeciesData.types) {
-				const types = oppSpeciesData.types.join(' / ');
-				console.log(`   属性: ${types}`);
-			}
+		speciesLog = `对手出战: ${oppSpeciesCN}`
+		// 显示属性
+		if (oppSpeciesData.types) {
+			const types = oppSpeciesData.types.join('/');
+			speciesLog += ` 属性:${types}`;
+		}
+
+		speciesLog += ` HP比例:${opponentActive.condition || '未知'}`;
+		
+		console.log(speciesLog);
 			
 			if (opponentActive.status) {
 				const statusNames = {
@@ -722,14 +725,15 @@ function displayChoices(request, battleField, opponentActive, playerBoosts, play
 		const speciesName = currentPokemon.ident.split(': ')[1];
 		const speciesData = Sim.Dex.species.get(speciesName);
 		const speciesCN = translate(speciesName, 'pokemon');
-		console.log(`\n当前出战: ${speciesCN}`);
-		console.log(`   HP: ${currentPokemon.condition}`);
+		speciesLog = `当前出战: ${speciesCN}`
 		
 		// 显示属性
 		if (speciesData.types) {
-			const types = speciesData.types.join(' / ');
-			console.log(`   属性: ${types}`);
+			const types = speciesData.types.join('/');
+			speciesLog += ` 属性:${types}`;
 		}
+		speciesLog += ` HP:${currentPokemon.condition}`;
+		console.log(speciesLog);
 		
 		// 显示携带物品（如果已知）
 		if (currentPokemon.item) {
@@ -798,7 +802,7 @@ function displayChoices(request, battleField, opponentActive, playerBoosts, play
 		}
 
 		// 显示可用招式
-		console.log('\n可用招式:');
+		console.log('可用招式:');
 		active.moves.forEach((move, index) => {
 			const moveData = Sim.Dex.moves.get(move.move);
 			const moveName = moveData.name || move.move;
@@ -861,7 +865,7 @@ function displaySwitchChoices(request) {
 
 // 获取玩家选择
 async function getPlayerChoice() {
-	const choice = await prompt('\n你的选择: ');
+	const choice = await prompt('你的选择: ');
 	return choice || 'move 1'; // 默认使用第一个招式
 }
 
