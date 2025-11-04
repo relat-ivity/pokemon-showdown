@@ -12,141 +12,40 @@ const fs = require('fs');
 const path = require('path');
 
 // 加载中文翻译文件
-let translations = { moves: {}, items: {}, abilities: {}, status: {} };
+let translations = { 
+	pokemon: {}, 
+	moves: {}, 
+	items: {}, 
+	abilities: {}, 
+	status: {
+		'slp': '睡眠', 'par': '麻痹', 'frz': '冰冻',
+		'brn': '灼伤', 'psn': '中毒', 'tox': '剧毒'
+	}
+};
+
 try {
 	const translationPath = path.join(__dirname, 'translations-cn.json');
 	if (fs.existsSync(translationPath)) {
-		translations = JSON.parse(fs.readFileSync(translationPath, 'utf8'));
-		console.log(`✓ 已加载翻译文件: ${Object.keys(translations.moves).length} 个招式, ${Object.keys(translations.items).length} 个道具, ${Object.keys(translations.abilities).length} 个特性\n`);
+		const loadedTranslations = JSON.parse(fs.readFileSync(translationPath, 'utf8'));
+		translations = { ...translations, ...loadedTranslations };
+		console.log(`✓ 已加载翻译文件:`);
+		console.log(`  - 宝可梦: ${Object.keys(translations.pokemon || {}).length} 个`);
+		console.log(`  - 招式: ${Object.keys(translations.moves || {}).length} 个`);
+		console.log(`  - 道具: ${Object.keys(translations.items || {}).length} 个`);
+		console.log(`  - 特性: ${Object.keys(translations.abilities || {}).length} 个\n`);
 	} else {
 		console.log('⚠ 未找到 translations-cn.json 文件，将使用英文显示\n');
-		// 使用默认的简化翻译表
-		translations = {
-	// 常用招式翻译
-	moves: {
-		'Thunderbolt': '十万伏特', 'Thunder': '打雷', 'Thunder Wave': '电磁波',
-		'Flamethrower': '喷射火焰', 'Fire Blast': '大字爆炎', 'Flame Charge': '蓄能焰袭',
-		'Surf': '冲浪', 'Hydro Pump': '水炮', 'Scald': '热水', 'Water Shuriken': '飞水手里剑',
-		'Ice Beam': '冰冻光束', 'Blizzard': '暴风雪',
-		'Earthquake': '地震', 'Earth Power': '大地之力',
-		'Psychic': '精神强念', 'Psyshock': '精神冲击',
-		'Shadow Ball': '暗影球', 'Dark Pulse': '恶之波动',
-		'Moonblast': '月亮之力', 'Dazzling Gleam': '魔法闪耀',
-		'Dragon Claw': '龙爪', 'Draco Meteor': '流星群',
-		'Swords Dance': '剑舞', 'Dragon Dance': '龙之舞', 'Nasty Plot': '诡计',
-		'Protect': '守住', 'Substitute': '替身',
-		'Stealth Rock': '隐形岩', 'Spikes': '撒菱', 'Toxic Spikes': '毒菱',
-		'Toxic': '剧毒', 'Will-O-Wisp': '鬼火',
-		'Roost': '羽栖', 'Recover': '自我再生', 'Synthesis': '光合作用',
-		'U-turn': '急速折返', 'Volt Switch': '伏特替换',
-		'Close Combat': '近身战', 'Drain Punch': '吸取拳', 'Mach Punch': '音速拳',
-		'Bullet Punch': '子弹拳', 'Quick Attack': '电光一闪',
-		'Stone Edge': '尖石攻击', 'Rock Slide': '岩崩',
-		'Gunk Shot': '垃圾射击', 'Sludge Bomb': '污泥炸弹',
-		'Energy Ball': '能量球', 'Giga Drain': '终极吸取', 'Solar Beam': '日光束',
-		'Iron Head': '铁头', 'Flash Cannon': '加农光炮',
-		'Brave Bird': '勇鸟猛攻', 'Hurricane': '暴风',
-		'Crunch': '咬碎', 'Knock Off': '拍落',
-		'X-Scissor': '十字剪', 'Bug Buzz': '虫鸣',
-		'Aqua Tail': '水流尾', 'Waterfall': '攀瀑',
-		'Play Rough': '嬉闹', 'Iron Tail': '铁尾',
-		'Rapid Spin': '高速旋转', 'Defog': '清除浓雾',
-		'Trick Room': '戏法空间', 'Tailwind': '顺风',
-		'Light Screen': '光墙', 'Reflect': '反射壁',
-		'Wish': '祈愿', 'Baton Pass': '接棒',
-		'Encore': '再来一次', 'Taunt': '挑衅',
-		'Calm Mind': '冥想', 'Bulk Up': '健美',
-		'Agility': '高速移动', 'Rock Polish': '岩石打磨',
-	},
-	// 常用道具翻译
-	items: {
-		'Leftovers': '吃剩的东西', 'Life Orb': '生命宝珠',
-		'Choice Scarf': '讲究围巾', 'Choice Band': '讲究头带', 'Choice Specs': '讲究眼镜',
-		'Focus Sash': '气息腰带', 'Assault Vest': '突击背心',
-		'Heavy-Duty Boots': '厚底靴', 'Rocky Helmet': '凹凸头盔',
-		'Light Ball': '电气球', 'Eviolite': '进化辉石',
-		'Weakness Policy': '弱点保险', 'Air Balloon': '飘浮石',
-		'Expert Belt': '达人带', 'Muscle Band': '力量头带',
-		'Wise Glasses': '博识眼镜', 'Scope Lens': '焦点镜',
-		'Sitrus Berry': '文柚果', 'Lum Berry': '木子果',
-		'Mental Herb': '心灵香草', 'White Herb': '白色香草',
-		'Damp Rock': '潮湿岩石', 'Heat Rock': '炽热岩石',
-		'Smooth Rock': '沙沙岩石', 'Icy Rock': '冰冷岩石',
-	},
-	// 常用特性翻译
-	abilities: {
-		'Levitate': '飘浮', 'Pressure': '压迫感', 'Static': '静电',
-		'Intimidate': '威吓', 'Adaptability': '适应力', 'Technician': '技术高手',
-		'Regenerator': '再生力', 'Magic Bounce': '魔法反射', 'Prankster': '恶作剧之心',
-		'Multiscale': '多重鳞片', 'Sturdy': '结实', 'Magic Guard': '魔法防守',
-		'Swift Swim': '悠游自如', 'Sand Rush': '拨沙', 'Chlorophyll': '叶绿素',
-		'Huge Power': '大力士', 'Pure Power': '瑜伽之力',
-		'Sheer Force': '强行', 'Iron Fist': '铁拳',
-		'Contrary': '唱反调', 'Unaware': '纯朴',
-		'Water Absorb': '储水', 'Volt Absorb': '蓄电', 'Flash Fire': '引火',
-		'Thick Fat': '厚脂肪', 'Drought': '日照', 'Drizzle': '降雨',
-		'Sand Stream': '扬沙', 'Snow Warning': '降雪',
-	},
-		// 状态翻译
-		status: {
-			'slp': '睡眠', 'par': '麻痹', 'frz': '冰冻',
-			'brn': '灼伤', 'psn': '中毒', 'tox': '剧毒'
-		}
-		};
 	}
 } catch (error) {
 	console.log('⚠ 加载翻译文件失败:', error.message);
+	console.log('  将使用英文显示\n');
 }
 
-// 简单的机器翻译缓存
-const translationCache = new Map();
-
-// 使用百度翻译API的简化版本（不需要密钥）
-async function machineTranslate(text) {
-	if (!text) return text;
-	
-	// 检查缓存
-	if (translationCache.has(text)) {
-		return translationCache.get(text);
-	}
-	
-	try {
-		// 这里使用一个简单的翻译规则
-		// 如果需要真正的机器翻译，可以替换为调用翻译API
-		
-		// 暂时返回原文（避免API调用延迟）
-		translationCache.set(text, text);
-		return text;
-	} catch (error) {
-		return text;
-	}
-}
-
-// 翻译函数（同步版本 - 优先使用词典）
+// 翻译函数
 function translate(text, category = 'moves') {
 	if (!text) return text;
 	const map = translations[category];
 	return map && map[text] ? map[text] : text;
-}
-
-// 智能翻译：词典优先，然后是简单的英文处理
-function smartTranslate(text, category = 'moves') {
-	if (!text) return text;
-	
-	// 1. 先查词典
-	const map = translations[category];
-	if (map && map[text]) {
-		return map[text];
-	}
-	
-	// 2. 如果是招式/道具名，尝试智能处理
-	// 去掉常见后缀，让英文更清晰
-	if (category === 'moves') {
-		// 保持英文，但加上常见翻译提示
-		return text; // 可以保留英文或添加简单规则
-	}
-	
-	return text;
 }
 
 // 创建命令行输入接口
