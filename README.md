@@ -2,6 +2,8 @@ Pokémon Showdown HKX Fork
 ========================================================================
 ```bash
 npm install
+npm install axios
+node build
 node pve-battle.js
 ```
 HKX Fork版本：随机六六单打，全50级，努力值全85
