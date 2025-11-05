@@ -133,7 +133,7 @@ Player 的队伍
    2.岩斧 [Rock] 威力：65 命中：90% (PP: 24/24) 描述：Sets Stealth Rock on the target's side.
    3.十字剪 [Bug] 威力：80 命中：100% (PP: 24/24) 描述：No additional effect.
    4.近身战 [Fighting] 威力：120 命中：100% (PP: 8/8) 描述：Lowers the user's Defense and Sp. Def by 1.
-Your choice: move 1
+你的选择: move 1
 
 【对手】 够赞猿 使用了 污泥波
   → 效果不理想...
@@ -142,23 +142,7 @@ Your choice: move 1
 【你】 劈斧螳螂 使用了 剑舞
   → 【你】 劈斧螳螂 的攻击上升了 2 级!
 
-[按回车查看下一回合]
-
-==================================================
-第 2 回合
-==================================================
-对手出战: 够赞猿 属性:Poison/Psychic HP(%):100/100
-当前出战: 劈斧螳螂 属性:Bug/Rock HP:96/156
-   携带物品: 厚底靴
-   特性: 锋锐 描述：This Pokemon's slicing moves have their power multiplied by 1.5.
-   能力变化: 攻击+2
-   太晶属性: Bug（可以太晶化！）
-可用招式:
-   1.剑舞 [Normal] 命中：-- (PP: 31/32) 描述：Raises the user's Attack by 2.
-   2.岩斧 [Rock] 威力：65 命中：90% (PP: 24/24) 描述：Sets Stealth Rock on the target's side.
-   3.十字剪 [Bug] 威力：80 命中：100% (PP: 24/24) 描述：No additional effect.
-   4.近身战 [Fighting] 威力：120 命中：100% (PP: 8/8) 描述：Lowers the user's Defense and Sp. Def by 1.
-Your choice: 
+[按回车进行下一回合]
 ```
 
 Pokémon Showdown
