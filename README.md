@@ -6,8 +6,9 @@ node pve-battle.js
 ```
 HKX Fork版本：随机六六单打，全50级，努力值全85
 
-附带中文google翻译
+附带中文翻译
 
+已接入deepseek作为对手对战，具体在[DEEPSEEK-AI-README.md](./DEEPSEEK-AI-README.md)文档中
 
 Pokémon Showdown
 ========================================================================

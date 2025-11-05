@@ -7,6 +7,7 @@
 
 const Sim = require('./dist/sim');
 const { SmartPlayerAI } = require('./smart-ai');
+const { DeepSeekAI } = require('./deepseek-ai');
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
@@ -169,8 +170,12 @@ async function startPVEBattle() {
 	const continueGame = await prompt('\n按回车开始对战...');
 	console.log('\n战斗开始！\n');
 	
-	// AI 对手 - 使用智能AI
-	const ai = new SmartPlayerAI(streams.p2);
+	// AI 对手 - 使用 DeepSeek AI（如果没有设置API密钥则使用智能AI）
+	const useDeepSeek = !!process.env.DEEPSEEK_API_KEY;
+	const ai = useDeepSeek 
+		? new DeepSeekAI(streams.p2, {}, false, translations)
+		: new SmartPlayerAI(streams.p2);
+	console.log("与你对战的是：" + (useDeepSeek ? "DeepSeek AI" : "本地智能AI"));
 	ai.start();
 	
 	let waitingForChoice = false;
