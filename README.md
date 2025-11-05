@@ -18,6 +18,14 @@ node pve-battle.js
 - 不使用deep seek时，则是cursor实现的简单的对战ai
 
 ### 命令行对战
+对战指令
+```bash
+使用招式: move 1
+切换宝可梦: switch 2
+太晶化攻击: move 1 terastallize  (使用第1个招式并太晶化)
+查看队伍: team  (查看所有宝可梦状态)
+```
+对战示例
 ```bash
 $ node pve-battle.js 
 === Pokemon Showdown PVE 对战 ===
