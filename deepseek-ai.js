@@ -13,7 +13,7 @@ const axios = require('axios');
 const fs = require('fs');
 
 class DeepSeekAI extends RandomPlayerAI {
-	constructor(playerStream, options = {}, debug = false, translations = {}) {
+	constructor(playerStream, options = {}, debug = false, translations = {}, battle = null, opponentTeamData = null) {
 		super(playerStream, options, debug);
 		this.apiKey = process.env.DEEPSEEK_API_KEY || '';
 		this.apiUrl = 'https://api.deepseek.com/v1/chat/completions';
@@ -21,6 +21,8 @@ class DeepSeekAI extends RandomPlayerAI {
 		this.conversationHistory = [];
 		this.lastRequest = null;
 		this.opponentTeam = {}; // 追踪对手队伍状态
+		this.battle = battle; // 保存战斗对象引用
+		this.opponentTeamData = opponentTeamData; // 对手的完整队伍数据
 	}
 	
 	// 接收战斗日志（追踪对手状态）
@@ -36,11 +38,18 @@ class DeepSeekAI extends RandomPlayerAI {
 				const condition = parts[4]; // 如 "100/100"
 				const speciesName = ident.split(': ')[1];
 				
+				if (!this.opponentTeam[speciesName]) {
 				this.opponentTeam[speciesName] = {
 					name: speciesName,
 					condition: condition,
-					active: true
+						active: true,
+						boosts: {}
 				};
+				} else {
+					this.opponentTeam[speciesName].condition = condition;
+					this.opponentTeam[speciesName].active = true;
+					this.opponentTeam[speciesName].boosts = {}; // 重置能力变化
+				}
 				
 				// 将其他宝可梦设为非出战
 				Object.keys(this.opponentTeam).forEach(key => {
@@ -48,6 +57,103 @@ class DeepSeekAI extends RandomPlayerAI {
 						this.opponentTeam[key].active = false;
 					}
 				});
+			}
+		}
+		
+		// 追踪对手使用的招式
+		if (line.startsWith('|move|p1')) {
+			const parts = line.split('|');
+			if (parts.length >= 3) {
+				const ident = parts[2];
+				const moveName = parts[3];
+				const speciesName = ident.split(': ')[1];
+				
+				if (this.opponentTeam[speciesName]) {
+					if (!this.opponentTeam[speciesName].moves) {
+						this.opponentTeam[speciesName].moves = [];
+					}
+					// 避免重复记录同一招式
+					if (!this.opponentTeam[speciesName].moves.includes(moveName)) {
+						this.opponentTeam[speciesName].moves.push(moveName);
+					}
+				}
+			}
+		}
+		
+		// 追踪对手的特性
+		if (line.startsWith('|-ability|p1')) {
+			const parts = line.split('|');
+			if (parts.length >= 3) {
+				const ident = parts[2];
+				const ability = parts[3];
+				const speciesName = ident.split(': ')[1];
+				
+				if (this.opponentTeam[speciesName]) {
+					this.opponentTeam[speciesName].ability = ability;
+				}
+			}
+		}
+		
+		// 追踪对手的道具
+		if (line.startsWith('|-item|p1')) {
+			const parts = line.split('|');
+			if (parts.length >= 3) {
+				const ident = parts[2];
+				const item = parts[3];
+				const speciesName = ident.split(': ')[1];
+				
+				if (this.opponentTeam[speciesName]) {
+					this.opponentTeam[speciesName].item = item;
+				}
+			}
+		}
+		
+		// 追踪对手的能力提升
+		if (line.startsWith('|-boost|p1')) {
+			const parts = line.split('|');
+			if (parts.length >= 4) {
+				const ident = parts[2];
+				const stat = parts[3];
+				const amount = parseInt(parts[4]);
+				const speciesName = ident.split(': ')[1];
+				
+				if (this.opponentTeam[speciesName]) {
+					if (!this.opponentTeam[speciesName].boosts) {
+						this.opponentTeam[speciesName].boosts = {};
+					}
+					this.opponentTeam[speciesName].boosts[stat] = (this.opponentTeam[speciesName].boosts[stat] || 0) + amount;
+				}
+			}
+		}
+		
+		// 追踪对手的能力下降
+		if (line.startsWith('|-unboost|p1')) {
+			const parts = line.split('|');
+			if (parts.length >= 4) {
+				const ident = parts[2];
+				const stat = parts[3];
+				const amount = parseInt(parts[4]);
+				const speciesName = ident.split(': ')[1];
+				
+				if (this.opponentTeam[speciesName]) {
+					if (!this.opponentTeam[speciesName].boosts) {
+						this.opponentTeam[speciesName].boosts = {};
+					}
+					this.opponentTeam[speciesName].boosts[stat] = (this.opponentTeam[speciesName].boosts[stat] || 0) - amount;
+				}
+			}
+		}
+		
+		// 追踪对手能力变化清除
+		if (line.startsWith('|-clearboost|p1') || line.startsWith('|-clearallboost|p1')) {
+			const parts = line.split('|');
+			if (parts.length >= 2) {
+				const ident = parts[2];
+				const speciesName = ident.split(': ')[1];
+				
+				if (this.opponentTeam[speciesName]) {
+					this.opponentTeam[speciesName].boosts = {};
+				}
 			}
 		}
 		
@@ -354,23 +460,200 @@ class DeepSeekAI extends RandomPlayerAI {
 			}
 		}
 		
-		// 对手队伍信息（不显示招式和特性）
+		// 对手队伍信息（显示精确完整信息）
 		state += '\n【对手队伍】\n';
-		const opponentPokemon = Object.values(this.opponentTeam);
-		if (opponentPokemon.length > 0) {
-			opponentPokemon.forEach((p, i) => {
-				const speciesCN = this.translate(p.name, 'pokemon');
-				const speciesData = Sim.Dex.species.get(p.name);
+		
+		// 使用传入的完整队伍数据
+		if (this.opponentTeamData && this.opponentTeamData.length > 0) {
+			// 显示对手的精确完整队伍信息
+			this.opponentTeamData.forEach((p, i) => {
+				const speciesName = p.species;
+				const speciesCN = this.translate(speciesName, 'pokemon');
+				const speciesData = Sim.Dex.species.get(speciesName);
 				
 				state += `${i + 1}. ${speciesCN}`;
-				if (p.active) state += ' [当前出战]';
+				
+				// 从追踪信息中获取当前状态
+				const trackedPokemon = this.opponentTeam[speciesName];
+				if (trackedPokemon && trackedPokemon.active) state += ' [当前出战]';
 				
 				// 属性
 				if (speciesData.types) {
 					state += ` 属性:${speciesData.types.join('/')}`;
 				}
 				
-				// HP和状态
+				// HP和状态（从追踪信息获取）
+				if (trackedPokemon && trackedPokemon.condition) {
+					if (trackedPokemon.condition.includes('fnt')) {
+						state += ' [已倒下]';
+					} else {
+						const hpMatch = trackedPokemon.condition.match(/(\d+)\/(\d+)/);
+						if (hpMatch) {
+							const current = parseInt(hpMatch[1]);
+							const max = parseInt(hpMatch[2]);
+							const percent = Math.round((current / max) * 100);
+							state += ` HP:${percent}%`;
+						}
+					}
+				} else {
+					state += ` HP:100%`;
+				}
+				
+				// 状态异常（从追踪信息获取）
+				if (trackedPokemon && trackedPokemon.status) {
+					const statusMap = {
+						'psn': '中毒', 'tox': '剧毒', 'brn': '灼伤',
+						'par': '麻痹', 'slp': '睡眠', 'frz': '冰冻'
+					};
+					state += ` [${statusMap[trackedPokemon.status] || trackedPokemon.status}]`;
+				}
+				
+				// 实际特性
+				if (p.ability) {
+					const abilityData = Sim.Dex.abilities.get(p.ability);
+					const abilityCN = this.translate(abilityData.name, 'abilities');
+					state += ` 特性:${abilityCN}`;
+					if (abilityData.shortDesc) {
+						state += `(${abilityData.shortDesc})`;
+					}
+				}
+				
+				// 实际道具
+				if (p.item) {
+					const itemData = Sim.Dex.items.get(p.item);
+					const itemCN = this.translate(itemData.name, 'items');
+					state += ` 道具:${itemCN}`;
+				}
+				
+				// 太晶属性
+				if (p.teraType) {
+					state += ` 太晶:${p.teraType}`;
+				}
+				
+				state += '\n';
+				
+				// 实际招式列表
+				if (p.moves && p.moves.length > 0) {
+					state += `   招式: `;
+					const moveNames = p.moves.map(moveName => {
+						const moveData = Sim.Dex.moves.get(moveName);
+						const moveCN = this.translate(moveData.name, 'moves');
+						let moveStr = `${moveCN}[${moveData.type}]`;
+						if (moveData.basePower) moveStr += `威力${moveData.basePower}`;
+						if (moveData.category) moveStr += `(${moveData.category})`;
+						return moveStr;
+					});
+					state += moveNames.join(', ') + '\n';
+				}
+				
+				// 显示能力等级（从追踪信息获取）
+				if (trackedPokemon && trackedPokemon.boosts) {
+					const boosts = [];
+					if (trackedPokemon.boosts.atk && trackedPokemon.boosts.atk !== 0) boosts.push(`攻击${trackedPokemon.boosts.atk > 0 ? '+' : ''}${trackedPokemon.boosts.atk}`);
+					if (trackedPokemon.boosts.def && trackedPokemon.boosts.def !== 0) boosts.push(`防御${trackedPokemon.boosts.def > 0 ? '+' : ''}${trackedPokemon.boosts.def}`);
+					if (trackedPokemon.boosts.spa && trackedPokemon.boosts.spa !== 0) boosts.push(`特攻${trackedPokemon.boosts.spa > 0 ? '+' : ''}${trackedPokemon.boosts.spa}`);
+					if (trackedPokemon.boosts.spd && trackedPokemon.boosts.spd !== 0) boosts.push(`特防${trackedPokemon.boosts.spd > 0 ? '+' : ''}${trackedPokemon.boosts.spd}`);
+					if (trackedPokemon.boosts.spe && trackedPokemon.boosts.spe !== 0) boosts.push(`速度${trackedPokemon.boosts.spe > 0 ? '+' : ''}${trackedPokemon.boosts.spe}`);
+					if (boosts.length > 0) {
+						state += `   能力变化: ${boosts.join(', ')}\n`;
+					}
+				}
+			});
+		} else if (this.battle && this.battle.sides) {
+			// 尝试从battle对象获取对手完整信息（备用）
+			let opponentSide = this.battle.sides.find(side => side.id !== request.side.id);
+			
+			if (opponentSide && opponentSide.pokemon) {
+				opponentSide.pokemon.forEach((p, i) => {
+					const speciesName = p.name || p.species?.name || p.baseSpecies?.name;
+					const speciesCN = this.translate(speciesName, 'pokemon');
+					const speciesData = Sim.Dex.species.get(speciesName);
+					
+					state += `${i + 1}. ${speciesCN}`;
+					if (p.isActive()) state += ' [当前出战]';
+					
+					if (p.species && p.species.types) {
+						state += ` 属性:${p.species.types.join('/')}`;
+					} else if (speciesData.types) {
+						state += ` 属性:${speciesData.types.join('/')}`;
+					}
+					
+					if (p.hp !== undefined) {
+						if (p.hp === 0 || p.fainted) {
+							state += ' [已倒下]';
+						} else if (p.maxhp) {
+							const percent = Math.round((p.hp / p.maxhp) * 100);
+							state += ` HP:${percent}%`;
+						}
+					}
+					
+					if (p.status) {
+						const statusMap = {
+							'psn': '中毒', 'tox': '剧毒', 'brn': '灼伤',
+							'par': '麻痹', 'slp': '睡眠', 'frz': '冰冻'
+						};
+						state += ` [${statusMap[p.status] || p.status}]`;
+					}
+					
+					if (p.ability || p.baseAbility) {
+						const abilityName = p.ability || p.baseAbility;
+						const abilityData = Sim.Dex.abilities.get(abilityName);
+						const abilityCN = this.translate(abilityData.name, 'abilities');
+						state += ` 特性:${abilityCN}`;
+					}
+					
+					if (p.item) {
+						const itemData = Sim.Dex.items.get(p.item);
+						const itemCN = this.translate(itemData.name, 'items');
+						state += ` 道具:${itemCN}`;
+					}
+					
+					if (p.teraType) {
+						state += ` 太晶:${p.teraType}`;
+					}
+					
+					state += '\n';
+					
+					if (p.moveSlots && p.moveSlots.length > 0) {
+						state += `   招式: `;
+						const moveNames = p.moveSlots.map(slot => {
+							const moveData = Sim.Dex.moves.get(slot.id || slot.move);
+							const moveCN = this.translate(moveData.name, 'moves');
+							let moveStr = `${moveCN}[${moveData.type}]`;
+							if (moveData.basePower) moveStr += `威力${moveData.basePower}`;
+							return moveStr;
+						});
+						state += moveNames.join(', ') + '\n';
+					}
+					
+					if (p.boosts) {
+						const boosts = [];
+						if (p.boosts.atk && p.boosts.atk !== 0) boosts.push(`攻击${p.boosts.atk > 0 ? '+' : ''}${p.boosts.atk}`);
+						if (p.boosts.def && p.boosts.def !== 0) boosts.push(`防御${p.boosts.def > 0 ? '+' : ''}${p.boosts.def}`);
+						if (p.boosts.spa && p.boosts.spa !== 0) boosts.push(`特攻${p.boosts.spa > 0 ? '+' : ''}${p.boosts.spa}`);
+						if (p.boosts.spd && p.boosts.spd !== 0) boosts.push(`特防${p.boosts.spd > 0 ? '+' : ''}${p.boosts.spd}`);
+						if (p.boosts.spe && p.boosts.spe !== 0) boosts.push(`速度${p.boosts.spe > 0 ? '+' : ''}${p.boosts.spe}`);
+						if (boosts.length > 0) {
+							state += `   能力变化: ${boosts.join(', ')}\n`;
+						}
+					}
+				});
+			} else {
+				state += '（暂无对手信息）\n';
+			}
+		} else {
+			// 使用追踪的信息（最后的备用方案）
+			const opponentPokemon = Object.values(this.opponentTeam);
+			if (opponentPokemon.length > 0) {
+				state += '（使用追踪信息，非完整数据）\n';
+				opponentPokemon.forEach((p, i) => {
+					const speciesCN = this.translate(p.name, 'pokemon');
+					const speciesData = Sim.Dex.species.get(p.name);
+					
+					state += `${i + 1}. ${speciesCN}`;
+					if (p.active) state += ' [当前出战]';
+					if (speciesData.types) state += ` 属性:${speciesData.types.join('/')}`;
+					
 				if (p.condition) {
 					if (p.condition.includes('fnt')) {
 						state += ' [已倒下]';
@@ -385,7 +668,6 @@ class DeepSeekAI extends RandomPlayerAI {
 					}
 				}
 				
-				// 状态异常
 				if (p.status) {
 					const statusMap = {
 						'psn': '中毒', 'tox': '剧毒', 'brn': '灼伤',
@@ -393,13 +675,38 @@ class DeepSeekAI extends RandomPlayerAI {
 					};
 					state += ` [${statusMap[p.status] || p.status}]`;
 				}
+					
+					if (p.ability) {
+						const abilityData = Sim.Dex.abilities.get(p.ability);
+						const abilityCN = this.translate(abilityData.name, 'abilities');
+						state += ` 特性:${abilityCN}`;
+					}
+					
+					if (p.item) {
+						const itemData = Sim.Dex.items.get(p.item);
+						const itemCN = this.translate(itemData.name, 'items');
+						state += ` 道具:${itemCN}`;
+				}
 				
 				state += '\n';
+					
+					if (p.moves && p.moves.length > 0) {
+						state += `   已知招式: `;
+						const moveNames = p.moves.map(moveName => {
+							const moveData = Sim.Dex.moves.get(moveName);
+							const moveCN = this.translate(moveData.name, 'moves');
+							let moveStr = `${moveCN}[${moveData.type}]`;
+							if (moveData.basePower) moveStr += `威力${moveData.basePower}`;
+							return moveStr;
+						});
+						state += moveNames.join(', ') + '\n';
+					}
 			});
 		} else {
 			state += '（暂无对手信息）\n';
+			}
 		}
-		
+		// console.log(state);
 		return state;
 	}
 	

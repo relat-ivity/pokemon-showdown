@@ -173,7 +173,7 @@ async function startPVEBattle() {
 	// AI 对手 - 使用 DeepSeek AI（如果没有设置API密钥则使用智能AI）
 	const useDeepSeek = !!process.env.DEEPSEEK_API_KEY;
 	const ai = useDeepSeek 
-		? new DeepSeekAI(streams.p2, {}, false, translations)
+		? new DeepSeekAI(streams.p2, {}, false, translations, null, p1team)
 		: new SmartPlayerAI(streams.p2);
 	console.log("与你对战的是：" + (useDeepSeek ? "DeepSeek AI" : "本地智能AI"));
 	ai.start();
@@ -602,7 +602,7 @@ async function startPVEBattle() {
 					// 检查是否是特殊命令
 					if (choice.toLowerCase() === 'team') {
 						// 显示当前队伍状态
-						displayBattleTeamStatus(currentRequest, playerBoosts, playerStatus);
+						displayBattleTeamStatus(currentRequest, playerStatus);
 						waitingForChoice = true; // 重新等待输入
 					} else {
 						// 直接写入选择，不需要 >p1 前缀
@@ -870,7 +870,7 @@ function displaySwitchChoices(request) {
 
 // 获取玩家选择
 async function getPlayerChoice() {
-	const choice = await prompt('你的选择: ');
+	const choice = await prompt('Your choice: ');
 	return choice || 'move 1'; // 默认使用第一个招式
 }
 
@@ -989,15 +989,13 @@ function displayTeamInfo(team, trainerName) {
 }
 
 // 显示战斗中的队伍状态
-function displayBattleTeamStatus(request, playerBoosts, playerStatus) {
+function displayBattleTeamStatus(request, playerStatus) {
 	if (!request || !request.side || !request.side.pokemon) {
 		console.log('无法获取队伍信息');
 		return;
 	}
 	
-	console.log('\n' + '='.repeat(60));
-	console.log('你的队伍状态');
-	console.log('='.repeat(60));
+	console.log('\nYour team: ');
 	
 	const pokemon = request.side.pokemon;
 	
@@ -1008,36 +1006,8 @@ function displayBattleTeamStatus(request, playerBoosts, playerStatus) {
 		const isActive = poke.active ? ' [出战中]' : '';
 		const isFainted = poke.condition.endsWith(' fnt') ? ' [已昏厥]' : '';
 		
-		console.log(`\n【${index + 1}】 ${speciesCN}${isActive}${isFainted}`);
-		console.log(`    HP: ${poke.condition}`);
-		
-		// 显示属性
-		if (speciesData.types) {
-			const types = speciesData.types.join(' / ');
-			console.log(`    属性: ${types}`);
-		}
-		
-		// 显示携带物品
-		if (poke.item) {
-			// 先通过 Dex 获取标准名称，再翻译
-			const itemData = Sim.Dex.items.get(poke.item);
-			const itemName = itemData.name || poke.item;
-			const itemCN = translate(itemName, 'items');
-			console.log(`    携带物品: ${itemCN}`);
-		}
-		
-		// 显示特性
-		if (poke.ability || poke.baseAbility) {
-			const ability = poke.ability || poke.baseAbility;
-			// 先通过 Dex 获取标准名称，再翻译
-			const abilityData = Sim.Dex.abilities.get(ability);
-			const abilityName = abilityData.name || ability;
-			const abilityCN = translate(abilityName, 'abilities');
-			console.log(`    特性: ${abilityCN}`);
-			if (abilityData.shortDesc || abilityData.desc) {
-				console.log(`       ${abilityData.shortDesc || abilityData.desc}`);
-			}
-		}
+		logInfo = `【${index + 1}】${speciesCN}${isActive}${isFainted}`;
+		logInfo += ` HP:${poke.condition}`;
 		
 		// 显示状态异常
 		const displayStatus = poke.active ? playerStatus : poke.status;
@@ -1050,72 +1020,10 @@ function displayBattleTeamStatus(request, playerBoosts, playerStatus) {
 				'psn': '中毒',
 				'tox': '剧毒'
 			};
-			console.log(`    状态: ${statusNames[displayStatus] || displayStatus}`);
+			logInfo +=` 状态:${statusNames[displayStatus] || displayStatus}`;
 		}
-		
-		// 显示能力等级变化（仅当前出战的宝可梦）
-		if (poke.active && playerBoosts && Object.keys(playerBoosts).length > 0) {
-			const boosts = [];
-			const boostNames = {
-				'atk': '攻击',
-				'def': '防御',
-				'spa': '特攻',
-				'spd': '特防',
-				'spe': '速度',
-				'accuracy': '命中',
-				'evasion': '闪避'
-			};
-			for (const stat in playerBoosts) {
-				const boost = playerBoosts[stat];
-				// 只有非零的能力变化才显示
-				if (typeof boost === 'number' && boost !== 0) {
-					const statCN = boostNames[stat] || stat;
-					const sign = boost > 0 ? '+' : '';
-					boosts.push(`${statCN}${sign}${boost}`);
-				}
-			}
-			if (boosts.length > 0) {
-				console.log(`    能力变化: ${boosts.join(' ')}`);
-			}
-		}
-		
-		// 显示已知的招式
-		if (poke.moves && poke.moves.length > 0) {
-			console.log(`    招式:`);
-			poke.moves.forEach((move, i) => {
-				const moveData = Sim.Dex.moves.get(move);
-				const moveName = moveData.name || move;
-				const moveCN = translate(moveName, 'moves');
-				let moveInfo = `       ${i + 1}.${moveCN}`;
-				
-				// 添加属性
-				if (moveData.type) {
-					moveInfo += ` [${moveData.type}]`;
-				}
-				
-				// 添加威力
-				if (moveData.basePower) {
-					moveInfo += ` 威力:${moveData.basePower}`;
-				}
-				
-				// 添加命中率
-				if (moveData.accuracy === true) {
-					moveInfo += ` 命中:--`;
-				} else if (moveData.accuracy) {
-					moveInfo += ` 命中:${moveData.accuracy}%`;
-				}
-				
-				console.log(moveInfo);
-				
-				// 添加技能描述
-				if (moveData.shortDesc || moveData.desc) {
-					console.log(`          ${moveData.shortDesc || moveData.desc}`);
-				}
-			});
-		}
+		console.log(logInfo);
 	});
-	
-	console.log('\n' + '='.repeat(60));
 }
 
 // 运行 PVE 对战
