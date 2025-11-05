@@ -1,15 +1,21 @@
 Pokémon Showdown HKX Fork 
 ========================================================================
+### 介绍
+Pokémon Showdown HKX Fork版本。可以和AI进行第九代随机六六单打，默认宝可梦全50级，努力值全85
+
+### 构建指令
 ```bash
 npm install
 node build
 node pve-battle.js
 ```
-HKX Fork版本：随机六六单打，全50级，努力值全85
 
-附带中文翻译
+### 中文翻译
+使用仓库[Pokemon-Chinese](https://github.com/relat-ivity/Pokemon-Chinese)中的json文件翻译
 
-已接入deepseek作为对手对战，具体在[DEEPSEEK-AI-README.md](./DEEPSEEK-AI-README.md)文档中
+### 对战AI
+- 已接入deepseek作为对手对战，具体在[DEEPSEEK-AI-README.md](./DEEPSEEK-AI-README.md)文档中
+- 不使用deep seek时，则是cursor实现的简单的对战ai
 
 Pokémon Showdown
 ========================================================================
