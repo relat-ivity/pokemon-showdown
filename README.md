@@ -2,7 +2,6 @@ Pokémon Showdown HKX Fork
 ========================================================================
 ```bash
 npm install
-npm install axios
 node build
 node pve-battle.js
 ```
